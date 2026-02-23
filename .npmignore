@@ -1,14 +1,22 @@
-# Development files
+# Test files
 test-project/
 plan.md
+
+# Environment files
 .env
 .env.*
+!.env.example
 
 # Git
 .git/
 .gitignore
 
-# Editor
+# IDE
 .vscode/
 .idea/
-*.code-workspace
+
+# Misc
+node_modules/
+*.log
+.agents/
+.gemini/
