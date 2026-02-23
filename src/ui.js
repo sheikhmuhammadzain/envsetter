@@ -306,17 +306,56 @@ async function askMode(missingCount, alreadySetCount) {
 
 // ─── Env File Selector ──────────────────────────────────────────────────────────
 
-async function askEnvFile() {
-  console.log(sectionHeader("Target File", "📄"))
+const fs = require("fs")
+const path = require("path")
+
+const ENV_FILE_OPTIONS = [
+  ".env",
+  ".env.local",
+  ".env.development",
+  ".env.production",
+]
+
+async function askEnvFile(cwd) {
+  console.log(sectionHeader("Target File", ">>"))
   console.log("")
 
-  const choices = [
-    {name: `${c(THEME.primary, BOX.arrow)} .env ${dim("(default)")}`, value: ".env"},
-    {name: `${c(THEME.textDim, BOX.arrow)} .env.local`, value: ".env.local"},
-    {name: `${c(THEME.textDim, BOX.arrow)} .env.development`, value: ".env.development"},
-    {name: `${c(THEME.textDim, BOX.arrow)} .env.production`, value: ".env.production"},
-    {name: `${c(THEME.accent, "…")} Custom path`, value: "custom"},
-  ]
+  // Detect which env files actually exist
+  const existing = ENV_FILE_OPTIONS.filter(f =>
+    fs.existsSync(path.join(cwd, f)),
+  )
+
+  const choices = []
+
+  // Show existing files first with a green dot
+  existing.forEach((f, i) => {
+    const isDefault = f === ".env"
+    const suffix = isDefault ? dim(" (default)") : ""
+    choices.push({
+      name: `${statusDot(THEME.success)} ${c(THEME.text, f)}${suffix}`,
+      value: f,
+    })
+  })
+
+  // Separator if we have existing files
+  if (existing.length > 0) {
+    choices.push(new inquirer.Separator(dim("  ─── create new ───")))
+  }
+
+  // Show non-existing files as "create new" options
+  const missing = ENV_FILE_OPTIONS.filter(f => !existing.includes(f))
+  missing.forEach(f => {
+    choices.push({
+      name: `${statusDot(THEME.muted)} ${c(THEME.textDim, f)} ${dim("(new)")}`,
+      value: f,
+    })
+  })
+
+  // Always show custom path
+  choices.push({
+    name: `${c(THEME.accent, "…")} Custom path`,
+    value: "custom",
+  })
 
   const {envFile} = await inquirer.prompt([
     {
@@ -324,7 +363,7 @@ async function askEnvFile() {
       name: "envFile",
       message: cBold(THEME.textDim, "Write to"),
       choices,
-      pageSize: 8,
+      pageSize: 10,
       prefix: c(THEME.accent, "  ?"),
     },
   ])

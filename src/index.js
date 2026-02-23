@@ -77,7 +77,7 @@ async function main() {
   }
 
   // ── Select Target File ─────────────────────────────────────────────────────
-  envFilePath = await askEnvFile()
+  envFilePath = await askEnvFile(cwd)
   const existingEnv = parseExistingEnv(path.resolve(cwd, envFilePath))
   console.log("")
 
