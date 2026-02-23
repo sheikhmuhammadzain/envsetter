@@ -1,7 +1,7 @@
 {
   "name": "envsetter",
   "version": "1.0.0",
-  "description": "Interactive CLI to scan your codebase for environment variables and set their values easily — no more manually writing KEY=VALUE.",
+  "description": "Interactive CLI to scan your codebase for environment variables and set their values — no more manually writing KEY=VALUE.",
   "main": "src/index.js",
   "bin": {
     "envsetter": "./bin/envsetter.js"
@@ -12,9 +12,6 @@
     "README.md",
     "LICENSE"
   ],
-  "engines": {
-    "node": ">=14.0.0"
-  },
   "keywords": [
     "env",
     "dotenv",
@@ -24,24 +21,31 @@
     "setter",
     "scanner",
     "interactive",
-    "devtools"
+    "env-manager",
+    "bulk-paste",
+    "monorepo",
+    "multi-folder",
+    "env-example"
   ],
-  "author": "Zain Afzal <hello@zainafzal.dev> (https://zainafzal.dev)",
+  "author": "Zain Afzal (https://zainafzal.dev)",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ZainAfzal/envsetter"
+    "url": "git+https://github.com/sheikhmuhammadzain/envsetter.git"
   },
-  "homepage": "https://zainafzal.dev",
+  "homepage": "https://github.com/sheikhmuhammadzain/envsetter#readme",
   "bugs": {
-    "url": "https://github.com/ZainAfzal/envsetter/issues"
+    "url": "https://github.com/sheikhmuhammadzain/envsetter/issues"
+  },
+  "engines": {
+    "node": ">=14.0.0"
   },
   "dependencies": {
-    "chalk": "^4.1.2",
-    "inquirer": "^8.2.6",
-    "ora": "^5.4.1",
-    "glob": "^8.1.0",
     "boxen": "^5.1.2",
-    "figures": "^3.2.0"
+    "chalk": "^4.1.2",
+    "figures": "^3.2.0",
+    "glob": "^8.1.0",
+    "inquirer": "^8.2.6",
+    "ora": "^5.4.1"
   }
 }
