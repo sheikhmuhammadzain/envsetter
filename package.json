@@ -1,12 +1,20 @@
 {
   "name": "envsetter",
   "version": "1.0.0",
-  "description": "Interactive CLI to scan your codebase for environment variables and set their values easily - no more manually writing KEY=VALUE.",
+  "description": "Interactive CLI to scan your codebase for environment variables and set their values easily — no more manually writing KEY=VALUE.",
   "main": "src/index.js",
   "bin": {
     "envsetter": "./bin/envsetter.js"
   },
-  "files": ["bin", "src"],
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=14.0.0"
+  },
   "keywords": [
     "env",
     "dotenv",
@@ -14,10 +22,20 @@
     "environment",
     "variables",
     "setter",
-    "scanner"
+    "scanner",
+    "interactive",
+    "devtools"
   ],
-  "author": "Zain Afzal (https://zainafzal.dev)",
+  "author": "Zain Afzal <hello@zainafzal.dev> (https://zainafzal.dev)",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZainAfzal/envsetter"
+  },
+  "homepage": "https://zainafzal.dev",
+  "bugs": {
+    "url": "https://github.com/ZainAfzal/envsetter/issues"
+  },
   "dependencies": {
     "chalk": "^4.1.2",
     "inquirer": "^8.2.6",

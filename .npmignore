@@ -1,0 +1,14 @@
+# Development files
+test-project/
+plan.md
+.env
+.env.*
+
+# Git
+.git/
+.gitignore
+
+# Editor
+.vscode/
+.idea/
+*.code-workspace

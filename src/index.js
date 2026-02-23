@@ -47,7 +47,7 @@ async function processFolder(folderPath, isDeepScan, folderLabel) {
     console.log(
       chalk.hex(T.accent)(`  › `) +
       chalk.bold.hex(T.text)(`Working in: `) +
-      chalk.bold.hex(T.primary)(folderLabel),
+      chalk.bold.hex(T.accent)(folderLabel),
     )
     console.log(chalk.hex(T.textSubtle)(`  ${"─".repeat(50)}`))
     console.log("")
