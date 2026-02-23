@@ -16,7 +16,7 @@
     "setter",
     "scanner"
   ],
-  "author": "You",
+  "author": "Zain Afzal (https://zainafzal.dev)",
   "license": "MIT",
   "dependencies": {
     "chalk": "^4.1.2",

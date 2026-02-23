@@ -19,15 +19,16 @@ const {writeEnvFile, ensureGitignore, syncToEnvExample} = require("./writer")
 
 // Theme colors matching ui.js
 const T = {
-  primary: "#00D4FF",
-  accent: "#A78BFA",
-  success: "#34D399",
-  warning: "#FBBF24",
-  danger: "#F87171",
-  muted: "#64748B",
-  text: "#E2E8F0",
-  textDim: "#94A3B8",
-  subtle: "#475569",
+  accent: "#3B82F6",
+  cyan: "#22D3EE",
+  green: "#10B981",
+  yellow: "#F59E0B",
+  red: "#EF4444",
+  purple: "#A78BFA",
+  text: "#F4F4F5",
+  textSecondary: "#A1A1AA",
+  textMuted: "#71717A",
+  textSubtle: "#52525B",
 }
 
 /**
@@ -44,11 +45,11 @@ async function processFolder(folderPath, isDeepScan, folderLabel) {
   if (folderLabel) {
     console.log("")
     console.log(
-      chalk.hex(T.accent)(`  ◆ `) +
+      chalk.hex(T.accent)(`  › `) +
       chalk.bold.hex(T.text)(`Working in: `) +
       chalk.bold.hex(T.primary)(folderLabel),
     )
-    console.log(chalk.hex(T.subtle)(`  ${"─".repeat(50)}`))
+    console.log(chalk.hex(T.textSubtle)(`  ${"─".repeat(50)}`))
     console.log("")
   }
 
@@ -58,30 +59,30 @@ async function processFolder(folderPath, isDeepScan, folderLabel) {
     : "Scanning env files for environment variables"
 
   const spinner = ora({
-    text: chalk.hex(T.textDim)(scanLabel),
+    text: chalk.hex(T.textSecondary)(scanLabel),
     spinner: "dots12",
     color: "cyan",
-    prefixText: chalk.hex(T.accent)("  ◆"),
+    prefixText: chalk.hex(T.accent)("  ›"),
   }).start()
 
   let foundVars
   try {
     foundVars = isDeepScan ? scanCodebase(folderPath) : scanEnvFilesOnly(folderPath)
   } catch (err) {
-    spinner.fail(chalk.hex(T.danger)("Failed to scan for environment variables"))
+    spinner.fail(chalk.hex(T.red)("Failed to scan for environment variables"))
     console.error(err)
     return {saved: 0, skipped: true}
   }
 
-  spinner.succeed(chalk.hex(T.success)("Scan complete"))
+  spinner.succeed(chalk.hex(T.green)("Scan complete"))
   console.log("")
 
   // ── No Variables Found ──────────────────────────────────────────────────────
   if (foundVars.size === 0) {
     console.log(
-      chalk.hex(T.warning)(
+      chalk.hex(T.yellow)(
         `  ⚠ No environment variables found.\n` +
-          chalk.hex(T.muted)(`  Try: envsetter --deep\n`),
+          chalk.hex(T.textMuted)(`  Try: envsetter --deep\n`),
       ),
     )
     return {saved: 0, skipped: true}
@@ -98,7 +99,7 @@ async function processFolder(folderPath, isDeepScan, folderLabel) {
   const mode = await askMode(missing, alreadySet)
 
   if (mode === "exit") {
-    console.log(chalk.hex(T.muted)("\n  Skipped this folder.\n"))
+    console.log(chalk.hex(T.textMuted)("\n  Skipped this folder.\n"))
     return {saved: 0, skipped: true}
   }
 
@@ -118,7 +119,7 @@ async function processFolder(folderPath, isDeepScan, folderLabel) {
       const synced = syncToEnvExample(savedKeys)
       if (synced > 0) {
         console.log(
-          chalk.hex(T.success)(
+          chalk.hex(T.green)(
             `  ✔ Synced ${synced} new ${synced > 1 ? "keys" : "key"} to .env.example`,
           ),
         )
@@ -139,7 +140,7 @@ async function processFolder(folderPath, isDeepScan, folderLabel) {
 
   if (varsToFill.length === 0) {
     console.log(
-      chalk.hex(T.success)(`\n  ✔ All environment variables are already set!\n`),
+      chalk.hex(T.green)(`\n  ✔ All environment variables are already set!\n`),
     )
     return {saved: 0, skipped: false}
   }
@@ -167,13 +168,13 @@ async function processFolder(folderPath, isDeepScan, folderLabel) {
   if (isIgnored === false) {
     console.log("")
     console.log(
-      chalk.hex(T.warning)(
+      chalk.hex(T.yellow)(
         `  ⚠ ${chalk.bold(envFilePath)} is ${chalk.bold("NOT")} in .gitignore!`,
       ),
     )
     console.log(
-      chalk.hex(T.muted)(
-        `    Run: ${chalk.hex(T.primary)(`echo "${path.basename(envFilePath)}" >> .gitignore`)}`,
+      chalk.hex(T.textMuted)(
+        `    Run: ${chalk.hex(T.accent)(`echo "${path.basename(envFilePath)}" >> .gitignore`)}`,
       ),
     )
   }
@@ -184,7 +185,7 @@ async function processFolder(folderPath, isDeepScan, folderLabel) {
     const synced = syncToEnvExample(savedKeys)
     if (synced > 0) {
       console.log(
-        chalk.hex(T.success)(
+        chalk.hex(T.green)(
           `  ✔ Synced ${synced} new ${synced > 1 ? "keys" : "key"} to .env.example`,
         ),
       )
@@ -203,22 +204,22 @@ async function main() {
 
   // ── Discover Folders with Env Files ────────────────────────────────────────
   const discoverSpinner = ora({
-    text: chalk.hex(T.textDim)("Discovering folders with env files..."),
+    text: chalk.hex(T.textSecondary)("Discovering folders with env files..."),
     spinner: "dots12",
     color: "cyan",
-    prefixText: chalk.hex(T.accent)("  ◆"),
+    prefixText: chalk.hex(T.accent)("  ›"),
   }).start()
 
   const folders = discoverEnvFolders(cwd)
 
   if (folders.length === 0) {
-    discoverSpinner.warn(chalk.hex(T.warning)("No env files found in any folder"))
+    discoverSpinner.warn(chalk.hex(T.yellow)("No env files found in any folder"))
     console.log("")
 
     if (!isDeepScan) {
       console.log(
-        chalk.hex(T.muted)(`  Try deep scanning to find env references in code:\n`) +
-        chalk.hex(T.primary)(`  $ envsetter --deep\n`),
+        chalk.hex(T.textMuted)(`  Try deep scanning to find env references in code:\n`) +
+        chalk.hex(T.accent)(`  $ envsetter --deep\n`),
       )
     }
 
@@ -229,7 +230,7 @@ async function main() {
   }
 
   discoverSpinner.succeed(
-    chalk.hex(T.success)(
+    chalk.hex(T.green)(
       `Found env files in ${folders.length} folder${folders.length > 1 ? "s" : ""}`,
     ),
   )
@@ -251,7 +252,7 @@ async function main() {
     if (totalSaved > 0) {
       console.log("")
       console.log(
-        chalk.hex(T.success)(
+        chalk.hex(T.green)(
           `  ✔ Total: ${totalSaved} variable${totalSaved > 1 ? "s" : ""} saved across ${folders.length} folders`,
         ),
       )

@@ -1,4 +1,4 @@
-﻿"use strict"
+"use strict"
 
 const chalk = require("chalk")
 const inquirer = require("inquirer")
@@ -8,75 +8,88 @@ const fs = require("fs")
 const path = require("path")
 
 // ─── Design System ──────────────────────────────────────────────────────────────
+// Inspired by Vercel / OpenAI CLI aesthetics — clean, minimal, professional
 const THEME = {
-  primary: "#00D4FF",
-  primaryDim: "#0097B2",
-  accent: "#A78BFA",
-  accentDim: "#7C5CBF",
-  success: "#34D399",
-  successDim: "#059669",
-  warning: "#FBBF24",
-  warningDim: "#D97706",
-  danger: "#F87171",
-  dangerDim: "#DC2626",
-  text: "#E2E8F0",
-  textDim: "#94A3B8",
-  muted: "#64748B",
-  subtle: "#475569",
+  // Core palette
+  brand: "#FFFFFF",
+  brandDim: "#A1A1AA",
+  accent: "#3B82F6",     // Blue
+  accentDim: "#1D4ED8",
+  cyan: "#22D3EE",
+  cyanDim: "#0891B2",
+  green: "#10B981",
+  greenDim: "#059669",
+  yellow: "#F59E0B",
+  yellowDim: "#D97706",
+  red: "#EF4444",
+  redDim: "#DC2626",
+  purple: "#A78BFA",
+  purpleDim: "#7C3AED",
+  // Text hierarchy
+  text: "#F4F4F5",
+  textSecondary: "#A1A1AA",
+  textMuted: "#71717A",
+  textSubtle: "#52525B",
+  // Borders
+  border: "#3F3F46",
+  borderDim: "#27272A",
 }
 
-const BOX = {
-  h: "─", v: "│",
-  dot: "●", diamond: "◆",
-  arrow: "▸", arrowRight: "→",
-  check: "✔", cross: "✖", warn: "⚠",
+// Unicode elements — geometric, clean
+const SYM = {
+  bar: "│",
+  dash: "─",
+  dot: "●",
+  ring: "○",
+  tri: "▲",
+  triRight: "▶",
+  triSmall: "›",
+  check: "✓",
+  cross: "✕",
+  warn: "⚠",
+  diamond: "◆",
+  arrow: "→",
+  bullet: "•",
+  ellipsis: "…",
+  block: "█",
+  blockLight: "░",
+  blockMed: "▒",
 }
 
 // ─── Utility Helpers ────────────────────────────────────────────────────────────
 
 function c(hex, text) { return chalk.hex(hex)(text) }
-function cBold(hex, text) { return chalk.bold.hex(hex)(text) }
-function dim(text) { return chalk.hex(THEME.muted)(text) }
+function cb(hex, text) { return chalk.bold.hex(hex)(text) }
+function dim(text) { return chalk.hex(THEME.textMuted)(text) }
+function subtle(text) { return chalk.hex(THEME.textSubtle)(text) }
 
 function clamp(n, min, max) { return Math.max(min, Math.min(max, n)) }
 
-function pad(str, width) {
-  const visible = str.replace(/\x1b\[[0-9;]*m/g, "")
-  return str + " ".repeat(Math.max(0, width - visible.length))
-}
+function visLen(str) { return str.replace(/\x1b\[[0-9;]*m/g, "").length }
 
-function centerText(text, width) {
-  const visible = text.replace(/\x1b\[[0-9;]*m/g, "")
-  const totalPad = Math.max(0, width - visible.length)
-  const leftPad = Math.floor(totalPad / 2)
-  return " ".repeat(leftPad) + text + " ".repeat(totalPad - leftPad)
+function pad(str, width) {
+  return str + " ".repeat(Math.max(0, width - visLen(str)))
 }
 
 // ─── Visual Components ──────────────────────────────────────────────────────────
 
-function progressBar(done, total, width = 28) {
-  if (total <= 0) return dim("░".repeat(width))
+function progressBar(done, total, width = 24) {
+  if (total <= 0) return subtle(SYM.blockLight.repeat(width))
   const ratio = clamp(done / total, 0, 1)
   const filled = Math.round(ratio * width)
   const empty = width - filled
-  return c(THEME.primary, "█".repeat(Math.ceil(filled / 2))) +
-    c(THEME.accent, "█".repeat(Math.floor(filled / 2))) +
-    chalk.hex(THEME.subtle)("░".repeat(empty))
+  return c(THEME.accent, SYM.block.repeat(filled)) +
+    chalk.hex(THEME.borderDim)(SYM.blockLight.repeat(empty))
 }
 
-function badge(text, color) {
-  return chalk.bgHex(color).hex("#0F172A").bold(` ${text} `)
-}
+function statusDot(color) { return chalk.hex(color)(SYM.dot) }
 
-function statusDot(color) { return chalk.hex(color)(BOX.dot) }
-function label(text) { return chalk.hex(THEME.textDim)(text) }
-
-function sectionHeader(title, icon = BOX.diamond) {
-  return `  ${c(THEME.accent, icon)} ${cBold(THEME.text, title)} ${c(THEME.subtle, BOX.h.repeat(Math.max(2, 42 - title.length)))}`
+function sectionLine(title, width = 48) {
+  const dashCount = Math.max(2, width - visLen(title) - 3)
+  return `  ${cb(THEME.text, title)} ${subtle(SYM.dash.repeat(dashCount))}`
 }
 
 // ─── Smart Value Hints ──────────────────────────────────────────────────────────
-// Detect expected value type from key name and provide helpful hints + defaults
 
 const VALUE_HINTS = [
   {test: /^(DATABASE_URL|DB_URL|POSTGRES_URL)$/i, type: "URL", hint: "Database connection string"},
@@ -100,15 +113,12 @@ const VALUE_HINTS = [
 
 function getValueHint(keyName) {
   for (const rule of VALUE_HINTS) {
-    if (rule.test.test(keyName)) {
-      return rule
-    }
+    if (rule.test.test(keyName)) return rule
   }
   return null
 }
 
 // ─── Category Detection ─────────────────────────────────────────────────────────
-// Group variables by prefix for visual grouping
 
 function getCategory(varName) {
   if (/^DATABASE|^DB_|^MONGO|^POSTGRES|^MYSQL|^REDIS|^SUPABASE/.test(varName)) return "Database"
@@ -124,37 +134,37 @@ function getCategory(varName) {
   return null
 }
 
-// ─── Inline Help Bar ────────────────────────────────────────────────────────────
-// Compact, always-visible hint line showing available commands
+// ─── Inline Help ────────────────────────────────────────────────────────────────
 
 function inlineHelp() {
   const cmds = [
-    `${cBold(THEME.primary, "skip")}`,
-    `${cBold(THEME.primary, "back")}`,
-    `${cBold(THEME.warning, "clear")}`,
-    `${cBold(THEME.accent, "list")}`,
-    `${cBold(THEME.danger, "exit")}`,
-    `${cBold(THEME.textDim, "skipall")}`,
+    cb(THEME.textSecondary, "skip"),
+    cb(THEME.textSecondary, "back"),
+    cb(THEME.yellow, "clear"),
+    cb(THEME.textSecondary, "list"),
+    cb(THEME.red, "exit"),
   ]
-  return `  ${dim("Cmds:")} ${cmds.join(dim(" · "))}  ${dim("| Enter = keep value | ? = help")}`
+  return `  ${subtle("Commands:")} ${cmds.join(subtle(" · "))}  ${subtle("Enter = keep  ? = help")}`
 }
 
 // ─── Full Command Panel ─────────────────────────────────────────────────────────
 
 function commandPanel() {
+  const w = 20
   const lines = [
     "",
-    sectionHeader("Commands", "?"),
+    `  ${cb(THEME.text, "Commands")}`,
+    `  ${subtle(SYM.dash.repeat(40))}`,
     "",
-    `    ${pad(cBold(THEME.primary, "skip"), 16)}  ${dim("Skip this variable")}`,
-    `    ${pad(cBold(THEME.primary, "back"), 16)}  ${dim("Go to previous variable")}`,
-    `    ${pad(cBold(THEME.warning, "clear"), 16)}  ${dim("Set value to empty string")}`,
-    `    ${pad(cBold(THEME.accent, "list"), 16)}  ${dim("Show all remaining variables")}`,
-    `    ${pad(cBold(THEME.textDim, "skipall"), 16)}  ${dim("Skip all remaining variables")}`,
-    `    ${pad(cBold(THEME.danger, "exit"), 16)}  ${dim("Stop and keep all saved values")}`,
+    `    ${pad(cb(THEME.accent, "skip"), w)}${dim("Skip this variable")}`,
+    `    ${pad(cb(THEME.accent, "back"), w)}${dim("Go to previous variable")}`,
+    `    ${pad(cb(THEME.yellow, "clear"), w)}${dim("Set value to empty string")}`,
+    `    ${pad(cb(THEME.textSecondary, "list"), w)}${dim("Show remaining variables")}`,
+    `    ${pad(cb(THEME.textSecondary, "skipall"), w)}${dim("Skip all remaining")}`,
+    `    ${pad(cb(THEME.red, "exit"), w)}${dim("End session")}`,
     "",
-    `    ${dim("Press")} ${cBold(THEME.text, "Enter")} ${dim("without typing to keep the current value")}`,
-    `    ${dim("Type")} ${cBold(THEME.text, "?")} ${dim("at any time to see this panel")}`,
+    `    ${dim("Press")} ${cb(THEME.text, "Enter")} ${dim("without typing to keep current value")}`,
+    `    ${dim("Type")} ${cb(THEME.text, "?")} ${dim("to show this panel")}`,
     "",
   ]
   return lines.join("\n")
@@ -163,37 +173,31 @@ function commandPanel() {
 // ─── Banner ─────────────────────────────────────────────────────────────────────
 
 function showBanner() {
-  const art = [
-    " _____ _   ___     __",
-    "| ____| \\ | \\ \\   / /",
-    "|  _| |  \\| |\\ \\ / / ",
-    "| |___| |\\  | \\ V /  ",
-    "|_____|_| \\_|  \\_/   ",
+  const version = "1.0.0"
+
+  const logo = [
+    "  ███████╗███╗   ██╗██╗   ██╗",
+    "  ██╔════╝████╗  ██║██║   ██║",
+    "  █████╗  ██╔██╗ ██║██║   ██║",
+    "  ██╔══╝  ██║╚██╗██║╚██╗ ██╔╝",
+    "  ███████╗██║ ╚████║ ╚████╔╝ ",
+    "  ╚══════╝╚═╝  ╚═══╝  ╚═══╝  ",
   ]
 
-  const gradientColors = [THEME.primary, THEME.primary, THEME.accent, THEME.accent, THEME.accentDim]
-  const coloredArt = art.map((line, i) => cBold(gradientColors[i], line))
+  // Gradient from cyan to blue to purple
+  const gradColors = ["#22D3EE", "#06B6D4", "#3B82F6", "#6366F1", "#8B5CF6", "#A78BFA"]
+  const coloredLogo = logo.map((l, i) => cb(gradColors[i], l))
 
-  const inner = [
-    "",
-    ...coloredArt,
-    "",
-    `  ${c(THEME.primaryDim, "---")} ${cBold(THEME.primary, "S E T T E R")} ${c(THEME.primaryDim, "---")}`,
-    "",
-    `  ${dim("Scan")} ${c(THEME.subtle, ">")} ${dim("Fill")} ${c(THEME.subtle, ">")} ${dim("Save")}  ${c(THEME.subtle, "|")}  ${dim("Interactive .env manager")}`,
-    `  ${dim("v1.0.0")}`,
-    "",
-  ].join("\n")
-
-  console.log(
-    boxen(inner, {
-      padding: {top: 0, bottom: 0, left: 2, right: 2},
-      margin: {top: 1, bottom: 1, left: 1, right: 0},
-      borderStyle: "round",
-      borderColor: THEME.primaryDim,
-      textAlignment: "left",
-    }),
-  )
+  console.log("")
+  coloredLogo.forEach(l => console.log(l))
+  console.log("")
+  console.log(`  ${cb(THEME.text, "setter")} ${subtle("v" + version)}`)
+  console.log(`  ${dim("Interactive environment variable manager")}`)
+  console.log("")
+  console.log(`  ${subtle(SYM.dash.repeat(44))}`)
+  console.log(`  ${dim("Created by")} ${cb(THEME.text, "Zain Afzal")}  ${subtle(SYM.bullet)}  ${c(THEME.accent, "zainafzal.dev")}`)
+  console.log(`  ${subtle(SYM.dash.repeat(44))}`)
+  console.log("")
 }
 
 // ─── Scan Result Summary ────────────────────────────────────────────────────────
@@ -209,25 +213,16 @@ function showScanResult(foundVars, existingEnv) {
   const alreadySet = [...foundVars.keys()].filter(hasUsableValue).length
   const missing = total - alreadySet
   const pct = total > 0 ? Math.round((alreadySet / total) * 100) : 0
-  const pctColor = pct >= 80 ? THEME.success : pct >= 50 ? THEME.warning : THEME.danger
+  const pctColor = pct >= 80 ? THEME.green : pct >= 50 ? THEME.yellow : THEME.red
 
-  const lines = [
-    sectionHeader("Scan Results"),
-    "",
-    `    ${statusDot(THEME.warning)}  ${label("Variables found")}   ${cBold(THEME.text, total.toString().padStart(4))}`,
-    `    ${statusDot(THEME.success)}  ${label("Already set")}      ${cBold(THEME.success, alreadySet.toString().padStart(4))}`,
-    `    ${statusDot(THEME.danger)}  ${label("Missing")}          ${cBold(THEME.danger, missing.toString().padStart(4))}`,
-    "",
-    `    ${label("Coverage")}  ${progressBar(alreadySet, total)}  ${cBold(pctColor, pct + "%")}`,
-    "",
-  ]
-
-  console.log(boxen(lines.join("\n"), {
-    padding: {top: 0, bottom: 0, left: 0, right: 1},
-    margin: {top: 0, bottom: 1, left: 1, right: 0},
-    borderStyle: "round",
-    borderColor: THEME.primaryDim,
-  }))
+  console.log(sectionLine("Scan Results"))
+  console.log("")
+  console.log(`    ${c(THEME.textSecondary, "Total")}        ${cb(THEME.text, String(total))}`)
+  console.log(`    ${c(THEME.green, "Set")}          ${cb(THEME.green, String(alreadySet))}`)
+  console.log(`    ${c(THEME.red, "Missing")}      ${cb(THEME.red, String(missing))}`)
+  console.log("")
+  console.log(`    ${progressBar(alreadySet, total)}  ${cb(pctColor, pct + "%")} ${dim("coverage")}`)
+  console.log("")
 
   return {total, alreadySet, missing}
 }
@@ -235,42 +230,41 @@ function showScanResult(foundVars, existingEnv) {
 // ─── Mode Selector ──────────────────────────────────────────────────────────────
 
 async function askMode(missingCount, alreadySetCount) {
-  console.log(sectionHeader("Choose Action", BOX.arrow))
+  console.log(sectionLine("Action"))
   console.log("")
 
   const choices = []
 
   if (missingCount > 0) {
     choices.push({
-      name: `${c(THEME.primary, BOX.arrow)} Fill missing only  ${badge(missingCount.toString(), THEME.primaryDim)}`,
+      name: `  ${c(THEME.accent, SYM.triRight)} Fill missing variables  ${dim("(" + missingCount + ")")}`,
       value: "missing",
     })
   }
 
   if (alreadySetCount > 0) {
-    const editLabel = missingCount > 0 ? "Edit all variables" : "Edit existing"
+    const editLabel = missingCount > 0 ? "Edit all variables" : "Edit existing variables"
     const editCount = missingCount > 0 ? missingCount + alreadySetCount : alreadySetCount
     choices.push({
-      name: `${c(THEME.accent, "✎")} ${editLabel}  ${badge(editCount.toString(), THEME.accentDim)}`,
+      name: `  ${c(THEME.purple, "✎")} ${editLabel}  ${dim("(" + editCount + ")")}`,
       value: "all",
     })
   }
 
-  // Always offer bulk paste
   choices.push({
-    name: `${c(THEME.success, "⬆")} Bulk paste  ${dim("(paste whole .env content)")}`,
+    name: `  ${c(THEME.cyan, "⬆")} Bulk paste  ${dim("paste entire .env content")}`,
     value: "bulk",
   })
 
   choices.push({
-    name: `${c(THEME.danger, BOX.cross)} Exit`,
+    name: `  ${c(THEME.textMuted, SYM.cross)} Exit`,
     value: "exit",
   })
 
   const {mode} = await inquirer.prompt([{
     type: "list",
     name: "mode",
-    message: cBold(THEME.textDim, "Select mode"),
+    message: cb(THEME.textSecondary, "Select mode"),
     choices,
     pageSize: 8,
     prefix: c(THEME.accent, "  ?"),
@@ -284,57 +278,51 @@ async function askMode(missingCount, alreadySetCount) {
 const WRITABLE_ENV_FILES = [".env", ".env.local", ".env.development", ".env.production"]
 
 async function askEnvFile(cwd) {
-  console.log(sectionHeader("Target File", ">>"))
+  console.log(sectionLine("Target File"))
   console.log("")
 
-  // Dynamically find ALL .env* files that exist in this directory
   let allFiles = []
   try {
     allFiles = fs.readdirSync(cwd).filter(f => {
       if (!f.startsWith(".env")) return false
-      // Must be a file, not a directory
       try { return fs.statSync(path.join(cwd, f)).isFile() } catch { return false }
     }).sort()
   } catch {
-    // If we can't read the dir, fall back to empty
+    // fallback
   }
 
   const choices = []
 
-  // Show ALL existing env files — clearly marked "exists"
   if (allFiles.length > 0) {
     allFiles.forEach(f => {
       const isExample = f.includes("example") || f.includes("sample") || f.includes("template")
-      const tag = isExample
-        ? c(THEME.success, "template · exists")
-        : c(THEME.success, "exists")
+      const tagText = isExample ? "template" : "exists"
       choices.push({
-        name: `${c(THEME.success, BOX.check)} ${cBold(THEME.text, f)}  ${dim("(")}${tag}${dim(")")}`,
+        name: `  ${c(THEME.green, SYM.check)} ${cb(THEME.text, f)}  ${dim(tagText)}`,
         value: f,
       })
     })
   }
 
-  // Show standard files that don't exist yet — clearly marked "new"
   const missingStandard = WRITABLE_ENV_FILES.filter(f => !allFiles.includes(f))
   if (missingStandard.length > 0) {
     if (choices.length > 0) {
-      choices.push(new inquirer.Separator(dim("  ─── create new ───")))
+      choices.push(new inquirer.Separator(subtle("    " + SYM.dash.repeat(30))))
     }
     missingStandard.forEach(f => {
       choices.push({
-        name: `${c(THEME.muted, "+")} ${c(THEME.textDim, f)}  ${dim("(new)")}`,
+        name: `  ${c(THEME.textSubtle, "+")} ${c(THEME.textSecondary, f)}  ${dim("create new")}`,
         value: f,
       })
     })
   }
 
-  choices.push({name: `${c(THEME.accent, "…")} Custom path`, value: "custom"})
+  choices.push({name: `  ${c(THEME.textMuted, SYM.ellipsis)} Custom path`, value: "custom"})
 
   const {envFile} = await inquirer.prompt([{
     type: "list",
     name: "envFile",
-    message: cBold(THEME.textDim, "Write to"),
+    message: cb(THEME.textSecondary, "Write to"),
     choices,
     pageSize: 12,
     prefix: c(THEME.accent, "  ?"),
@@ -344,11 +332,11 @@ async function askEnvFile(cwd) {
     const {customPath} = await inquirer.prompt([{
       type: "input",
       name: "customPath",
-      message: cBold(THEME.textDim, "Enter path"),
+      message: cb(THEME.textSecondary, "Enter path"),
       default: ".env",
       prefix: c(THEME.accent, "  ?"),
       validate: input => {
-        if (!input || !input.trim()) return chalk.hex(THEME.danger)("Path cannot be empty")
+        if (!input || !input.trim()) return chalk.hex(THEME.red)("Path cannot be empty")
         return true
       },
     }])
@@ -368,7 +356,6 @@ async function promptForValues(varsToFill, existingEnv, foundVars, onSetValue) {
   let skippedCount = 0
   let lastCategory = null
 
-  // Show full commands panel once at start
   console.log(commandPanel())
 
   for (let i = 0; i < varList.length; i++) {
@@ -379,38 +366,45 @@ async function promptForValues(varsToFill, existingEnv, foundVars, onSetValue) {
     const stepNum = i + 1
     const hint = getValueHint(varName)
 
-    // ─── Category Header (group visual separator) ─────────
+    // ─── Category Header ─────────────────────────────
     const category = getCategory(varName)
     if (category && category !== lastCategory) {
       console.log("")
-      console.log(`  ${badge(category, THEME.accentDim)}`)
+      console.log(`  ${cb(THEME.purple, category)}`)
       lastCategory = category
     }
 
-    // ─── Variable Card ────────────────────────────────────
+    // ─── Variable Card ───────────────────────────────
     const pct = Math.round((i / total) * 100)
 
-    // Build a clean card for this variable
     const cardLines = []
-    cardLines.push(`${c(THEME.primary, BOX.diamond)} ${cBold(THEME.text, varName)}  ${dim(`[${stepNum}/${total}]`)}  ${dim(pct + "%")}`)
-    cardLines.push(`${progressBar(i, total, 30)}`)
 
-    // Type + source on one line
+    // Header line: name + counter
+    cardLines.push(
+      `${cb(THEME.text, varName)}  ${subtle(`${stepNum}/${total}`)}  ${subtle(pct + "%")}`,
+    )
+
+    // Progress bar
+    cardLines.push(progressBar(i, total, 28))
+
+    // Type hint
     if (hint) {
-      const typeColor = hint.type === "Secret" ? THEME.warning : THEME.accent
-      cardLines.push(`${c(typeColor, hint.type)} ${dim(hint.hint)}`)
+      const typeColor = hint.type === "Secret" ? THEME.yellow : THEME.accent
+      cardLines.push(`${c(typeColor, hint.type)} ${subtle(SYM.triSmall)} ${dim(hint.hint)}`)
     }
+
+    // Source files
     if (locations && locations.size > 0) {
       const files = [...locations].slice(0, 3)
-      const extra = locations.size > 3 ? dim(` +${locations.size - 3}`) : ""
-      cardLines.push(`${dim("Found in:")} ${files.map(f => c(THEME.textDim, f)).join(dim(", "))}${extra}`)
+      const extra = locations.size > 3 ? dim(` +${locations.size - 3} more`) : ""
+      cardLines.push(`${dim("in")} ${files.map(f => c(THEME.textSecondary, f)).join(dim(", "))}${extra}`)
     }
 
     // Current value
     if (currentValue) {
-      cardLines.push(`${statusDot(THEME.success)} ${dim("Current:")} ${dim(maskValue(currentValue))}`)
+      cardLines.push(`${statusDot(THEME.green)} ${dim("current:")} ${dim(maskValue(currentValue))}`)
     } else {
-      cardLines.push(`${statusDot(THEME.warning)} ${dim("Not set")}`)
+      cardLines.push(`${statusDot(THEME.yellow)} ${dim("not set")}`)
     }
 
     console.log("")
@@ -418,20 +412,20 @@ async function promptForValues(varsToFill, existingEnv, foundVars, onSetValue) {
       padding: {top: 0, bottom: 0, left: 1, right: 1},
       margin: {top: 0, bottom: 0, left: 1, right: 0},
       borderStyle: "round",
-      borderColor: THEME.subtle,
+      borderColor: THEME.border,
     }))
 
-    // ─── Value Input ────────────────────────────────────
+    // ─── Value Input ─────────────────────────────────
     while (true) {
       const promptIcon = secretLike
-        ? c(THEME.warning, "  🔒")
-        : c(THEME.primary, "  " + BOX.arrow)
+        ? c(THEME.yellow, "  " + SYM.diamond)
+        : c(THEME.accent, "  " + SYM.triSmall)
 
       const {value} = await inquirer.prompt([{
         type: secretLike ? "password" : "input",
         mask: secretLike ? "•" : undefined,
         name: "value",
-        message: cBold(THEME.text, secretLike ? "Secret" : "Value"),
+        message: cb(THEME.textSecondary, secretLike ? "Secret" : "Value"),
         default: currentValue || undefined,
         prefix: promptIcon,
       }])
@@ -439,30 +433,32 @@ async function promptForValues(varsToFill, existingEnv, foundVars, onSetValue) {
       const trimmed = value.trim()
       const cmd = trimmed.toLowerCase()
 
-      // ─── Command: exit ──────────────────────────────────
+      // ─── Command: exit ──────────────────────────────
       if (cmd === "quit" || cmd === "exit") {
         const {confirmExit} = await inquirer.prompt([{
           type: "confirm",
           name: "confirmExit",
-          message: dim("End session? All saved values are kept."),
+          message: dim("End session? Saved values are kept."),
           default: true,
-          prefix: c(THEME.warning, "  " + BOX.warn),
+          prefix: c(THEME.yellow, "  " + SYM.warn),
         }])
         if (confirmExit) {
-          console.log(c(THEME.warning, `\n  ${BOX.warn} Session ended early.\n`))
+          console.log("")
+          console.log(`  ${c(THEME.yellow, SYM.warn)} ${dim("Session ended early.")}`)
+          console.log("")
           exitRequested = true
           break
         }
         continue
       }
 
-      // ─── Command: help ──────────────────────────────────
+      // ─── Command: help ──────────────────────────────
       if (cmd === "help" || cmd === "?") {
         console.log(commandPanel())
         continue
       }
 
-      // ─── Command: list ──────────────────────────────────
+      // ─── Command: list ──────────────────────────────
       if (cmd === "list") {
         const remaining = varList.slice(i + 1)
         if (remaining.length === 0) {
@@ -471,54 +467,54 @@ async function promptForValues(varsToFill, existingEnv, foundVars, onSetValue) {
           console.log(dim(`    Remaining (${remaining.length}):`))
           remaining.forEach((v, idx) => {
             const cat = getCategory(v)
-            const catLabel = cat ? c(THEME.accentDim, ` [${cat}]`) : ""
-            const num = dim(`${(idx + 1).toString().padStart(2)}.`)
-            console.log(`      ${num} ${c(THEME.textDim, v)}${catLabel}`)
+            const catLabel = cat ? dim(` [${cat}]`) : ""
+            const num = subtle(`${(idx + 1).toString().padStart(2)}.`)
+            console.log(`      ${num} ${c(THEME.textSecondary, v)}${catLabel}`)
           })
         }
         console.log("")
         continue
       }
 
-      // ─── Command: back ──────────────────────────────────
+      // ─── Command: back ──────────────────────────────
       if (cmd === "back") {
         if (i === 0) {
-          console.log(dim(`    ${BOX.arrowRight} Already at first variable`))
+          console.log(dim(`    ${SYM.arrow} Already at first variable`))
           continue
         }
         i -= 2
-        lastCategory = null // reset category header
-        console.log(dim(`    ${BOX.arrowRight} Going back...`))
+        lastCategory = null
+        console.log(dim(`    ${SYM.arrow} Going back...`))
         break
       }
 
-      // ─── Command: skip ──────────────────────────────────
+      // ─── Command: skip ──────────────────────────────
       if (cmd === "skip") {
         skippedCount += 1
-        console.log(`  ${c(THEME.textDim, BOX.arrowRight)} ${dim("Skipped")}`)
+        console.log(`  ${subtle(SYM.arrow)} ${dim("skipped")}`)
         break
       }
 
-      // ─── Command: skipall ─────────────────────────────────
+      // ─── Command: skipall ───────────────────────────
       if (cmd === "skipall") {
         const remaining = total - (i + 1)
         const {confirmSkip} = await inquirer.prompt([{
           type: "confirm",
           name: "confirmSkip",
-          message: dim(`Skip all ${remaining + 1} remaining variable${remaining > 0 ? "s" : ""}?`),
+          message: dim(`Skip all ${remaining + 1} remaining?`),
           default: false,
-          prefix: c(THEME.warning, "  " + BOX.warn),
+          prefix: c(THEME.yellow, "  " + SYM.warn),
         }])
         if (confirmSkip) {
           skippedCount += remaining + 1
-          console.log(dim(`    ${BOX.arrowRight} Skipped ${remaining + 1} variables`))
+          console.log(dim(`    ${SYM.arrow} Skipped ${remaining + 1} variables`))
           exitRequested = true
           break
         }
         continue
       }
 
-      // ─── Save Value ─────────────────────────────────────
+      // ─── Save Value ────────────────────────────────
       const finalValue = cmd === "clear" ? "" : value
 
       if (typeof onSetValue === "function") {
@@ -527,12 +523,12 @@ async function promptForValues(varsToFill, existingEnv, foundVars, onSetValue) {
 
       results.set(varName, finalValue)
       const unchanged = currentValue === finalValue
-      const icon = unchanged ? c(THEME.textDim, BOX.check) : c(THEME.success, BOX.check)
-      const saveText = unchanged ? c(THEME.textDim, "Unchanged") : c(THEME.success, "Saved")
+      const icon = unchanged ? subtle(SYM.check) : c(THEME.green, SYM.check)
+      const saveText = unchanged ? dim("unchanged") : c(THEME.green, "saved")
       const remaining = total - (i + 1)
-      const stats = dim(`${results.size} done · ${skippedCount} skipped · ${remaining} left`)
+      const stats = subtle(`${results.size} done ${SYM.bullet} ${skippedCount} skipped ${SYM.bullet} ${remaining} left`)
 
-      console.log(`  ${icon} ${saveText}  ${dim(BOX.v)}  ${stats}`)
+      console.log(`  ${icon} ${saveText}  ${subtle(SYM.bar)}  ${stats}`)
       break
     }
 
@@ -560,51 +556,34 @@ function showSummary(saved, envFilePath) {
   console.log("")
 
   if (saved === 0) {
-    const content = [
-      "",
-      centerText(c(THEME.warning, BOX.warn) + "  " + cBold(THEME.warning, "No changes made"), 48),
-      "",
-      centerText(dim("All variables were skipped or already set."), 48),
-      "",
-    ].join("\n")
-
-    console.log(boxen(content, {
-      padding: {top: 0, bottom: 0, left: 1, right: 1},
-      margin: {top: 0, bottom: 1, left: 1, right: 0},
-      borderStyle: "round",
-      borderColor: THEME.warningDim,
-    }))
+    console.log(`  ${c(THEME.yellow, SYM.warn)}  ${cb(THEME.yellow, "No changes made")}`)
+    console.log(`     ${dim("All variables were skipped or already set.")}`)
+    console.log("")
     return
   }
 
-  const content = [
+  const lines = [
     "",
-    centerText(c(THEME.success, BOX.check) + "  " + cBold(THEME.success, "Complete"), 48),
+    `  ${c(THEME.green, SYM.check)}  ${cb(THEME.green, "Done")}`,
     "",
-    `  ${label("Saved")}     ${cBold(THEME.text, saved.toString())} ${dim(saved > 1 ? "variables" : "variable")}`,
-    `  ${label("Target")}    ${cBold(THEME.primary, envFilePath)}`,
+    `     ${dim("Saved")}      ${cb(THEME.text, String(saved))} ${dim(saved > 1 ? "variables" : "variable")}`,
+    `     ${dim("Target")}     ${cb(THEME.accent, envFilePath)}`,
     "",
-    centerText(dim(`Tip: make sure ${envFilePath} is in .gitignore`), 48),
+    `     ${subtle("Make sure " + envFilePath + " is in .gitignore")}`,
     "",
   ].join("\n")
 
-  console.log(boxen(content, {
-    padding: {top: 0, bottom: 0, left: 1, right: 1},
-    margin: {top: 0, bottom: 1, left: 1, right: 0},
-    borderStyle: "round",
-    borderColor: THEME.success,
-  }))
+  console.log(lines)
 }
 
 // ─── Folder Picker ──────────────────────────────────────────────────────────────
 
 function askFolder(folders) {
-  // If only root folder, auto-select
   if (folders.length <= 1) {
     return Promise.resolve(folders[0] || null)
   }
 
-  console.log(sectionHeader("Project Folders", ">>"))
+  console.log(sectionLine("Project Folders"))
   console.log("")
   console.log(dim("  Multiple folders with env files detected:"))
   console.log("")
@@ -614,20 +593,19 @@ function askFolder(folders) {
     const folderName = isRoot ? "./ (root)" : folder.relPath
     const fileCount = folder.envFiles.length
     const fileList = folder.envFiles
-      .map(f => c(THEME.textDim, f))
+      .map(f => c(THEME.textSecondary, f))
       .join(dim(", "))
 
     return {
-      name: `${c(THEME.primary, BOX.arrow)} ${cBold(THEME.text, folderName)}  ${dim(`(${fileCount} file${fileCount > 1 ? "s" : ""}:`)} ${fileList}${dim(")")}`,
+      name: `  ${c(THEME.accent, SYM.triSmall)} ${cb(THEME.text, folderName)}  ${dim(`${fileCount} file${fileCount > 1 ? "s" : ""}:`)} ${fileList}`,
       value: folder,
       short: folderName,
     }
   })
 
-  // Add an "all folders" option
-  choices.push(new inquirer.Separator(dim("  ─────────────────────")))
+  choices.push(new inquirer.Separator(subtle("    " + SYM.dash.repeat(30))))
   choices.push({
-    name: `${c(THEME.accent, "+")} ${c(THEME.accent, "Edit all folders")} ${dim(`(${folders.length} total)`)}`,
+    name: `  ${c(THEME.purple, "+")} ${c(THEME.purple, "Edit all folders")} ${dim(`(${folders.length})`)}`,
     value: "all",
     short: "All folders",
   })
@@ -635,7 +613,7 @@ function askFolder(folders) {
   return inquirer.prompt([{
     type: "list",
     name: "folder",
-    message: cBold(THEME.textDim, "Select folder"),
+    message: cb(THEME.textSecondary, "Select folder"),
     choices,
     pageSize: 15,
     prefix: c(THEME.accent, "  ?"),
@@ -644,31 +622,22 @@ function askFolder(folders) {
 
 // ─── Bulk Paste ─────────────────────────────────────────────────────────────────
 
-/**
- * Parse raw bulk env text into a clean Map of key→value.
- * Handles messy input: extra spaces, missing quotes, duplicates, comments.
- */
 function parseBulkInput(raw) {
   const result = new Map()
   const lines = raw.split(/\r?\n/)
 
   for (const line of lines) {
     const trimmed = line.trim()
-
-    // Skip empty lines and comments
     if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("//")) continue
 
-    // Find the first = sign
     const eqIndex = trimmed.indexOf("=")
     if (eqIndex === -1) continue
 
     const key = trimmed.substring(0, eqIndex).trim()
     let value = trimmed.substring(eqIndex + 1).trim()
 
-    // Skip invalid keys
     if (!key || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue
 
-    // Remove surrounding quotes
     if (
       (value.startsWith('"') && value.endsWith('"')) ||
       (value.startsWith("'") && value.endsWith("'"))
@@ -676,7 +645,6 @@ function parseBulkInput(raw) {
       value = value.slice(1, -1)
     }
 
-    // Remove inline comments (but not inside quoted values)
     const commentIdx = value.indexOf(" #")
     if (commentIdx > -1) {
       value = value.substring(0, commentIdx).trim()
@@ -691,22 +659,19 @@ async function askBulkPaste() {
   const readline = require("readline")
 
   console.log("")
-  console.log(sectionHeader("Bulk Paste", "+"))
+  console.log(sectionLine("Bulk Paste"))
   console.log("")
   console.log(dim("  Paste your env content below and press Enter."))
   console.log(dim("  Trailing empty lines are automatically ignored."))
   console.log("")
 
-  // Collect lines using readline — works reliably on Windows
-  // Multi-line paste sends all lines within milliseconds
-  // We auto-finish after 500ms of no new lines
   const collectedLines = []
 
   const content = await new Promise((resolve) => {
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
-      prompt: c(THEME.primary, "  " + BOX.arrow + " "),
+      prompt: c(THEME.accent, "  " + SYM.triSmall + " "),
     })
 
     let timer = null
@@ -721,13 +686,11 @@ async function askBulkPaste() {
     rl.prompt()
 
     rl.on("line", (line) => {
-      // Empty line after we have data = finish
       if (line.trim() === "" && collectedLines.length > 0) {
         finish()
         return
       }
 
-      // Skip leading empty lines
       if (line.trim() === "" && collectedLines.length === 0) {
         rl.prompt()
         return
@@ -735,11 +698,9 @@ async function askBulkPaste() {
 
       collectedLines.push(line)
 
-      // Show live count
       const varCount = parseBulkInput(collectedLines.join("\n")).size
-      console.log(dim(`     ${BOX.check} ${varCount} var${varCount !== 1 ? "s" : ""} detected`))
+      console.log(dim(`     ${SYM.check} ${varCount} var${varCount !== 1 ? "s" : ""} detected`))
 
-      // Auto-finish after debounce (catches multi-line paste)
       if (timer) clearTimeout(timer)
       timer = setTimeout(finish, DEBOUNCE_MS)
 
@@ -753,49 +714,47 @@ async function askBulkPaste() {
   })
 
   if (!content || !content.trim()) {
-    console.log(dim("  No content pasted. Skipping."))
+    console.log(dim("  No content pasted."))
     return null
   }
 
   const parsed = parseBulkInput(content)
 
   if (parsed.size === 0) {
-    console.log(c(THEME.warning, `\n  ${BOX.warn} No valid KEY=VALUE pairs found.`))
+    console.log(`  ${c(THEME.yellow, SYM.warn)} ${dim("No valid KEY=VALUE pairs found.")}`)
     console.log(dim("  Expected format: KEY=value or KEY=\"value\""))
     console.log("")
     return null
   }
 
-  // Show what was parsed
   const keys = [...parsed.keys()]
   const secretKeys = keys.filter(k => isSensitiveKey(k))
   const publicKeys = keys.filter(k => !isSensitiveKey(k))
 
   console.log("")
-  console.log(sectionHeader(`Found ${keys.length} variable${keys.length > 1 ? "s" : ""}`, BOX.check))
+  console.log(sectionLine(`Found ${keys.length} variable${keys.length > 1 ? "s" : ""}`))
   console.log("")
 
   publicKeys.forEach(k => {
     const val = parsed.get(k)
-    const displayVal = val ? c(THEME.textDim, val.length > 40 ? val.substring(0, 37) + "..." : val) : dim("(empty)")
-    console.log(`    ${c(THEME.success, BOX.check)} ${c(THEME.text, k)} ${dim("=")} ${displayVal}`)
+    const displayVal = val ? c(THEME.textSecondary, val.length > 40 ? val.substring(0, 37) + "..." : val) : dim("(empty)")
+    console.log(`    ${c(THEME.green, SYM.check)} ${c(THEME.text, k)} ${subtle("=")} ${displayVal}`)
   })
   secretKeys.forEach(k => {
-    console.log(`    ${c(THEME.success, BOX.check)} ${c(THEME.text, k)} ${dim("=")} ${dim(maskValue(parsed.get(k)))}  ${dim("[secret]")}`)
+    console.log(`    ${c(THEME.green, SYM.check)} ${c(THEME.text, k)} ${subtle("=")} ${dim(maskValue(parsed.get(k)))}  ${dim("[secret]")}`)
   })
   console.log("")
 
-  // Confirm before writing
   const {confirm} = await inquirer.prompt([{
     type: "confirm",
     name: "confirm",
-    message: cBold(THEME.text, `Write ${keys.length} variable${keys.length > 1 ? "s" : ""} to env file?`),
+    message: cb(THEME.textSecondary, `Write ${keys.length} variable${keys.length > 1 ? "s" : ""}?`),
     default: true,
     prefix: c(THEME.accent, "  ?"),
   }])
 
   if (!confirm) {
-    console.log(dim("  Cancelled. Nothing was written."))
+    console.log(dim("  Cancelled."))
     return null
   }
 
