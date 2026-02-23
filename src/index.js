@@ -14,7 +14,7 @@ const {
   promptForValues,
   showSummary,
 } = require("./ui")
-const {writeEnvFile, ensureGitignore} = require("./writer")
+const {writeEnvFile, ensureGitignore, syncToEnvExample} = require("./writer")
 
 // Theme colors matching ui.js
 const T = {

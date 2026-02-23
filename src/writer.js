@@ -123,4 +123,59 @@ function ensureGitignore(envFilePath) {
   return true
 }
 
-module.exports = {writeEnvFile, ensureGitignore}
+/**
+ * Sync keys (without values) to .env.example
+ * - Creates .env.example if it doesn't exist
+ * - Only appends keys that are not already present
+ * - Preserves existing comments and structure
+ */
+function syncToEnvExample(keys) {
+  const examplePath = path.resolve(".env.example")
+  let existingKeys = new Set()
+  let lines = []
+
+  if (fs.existsSync(examplePath)) {
+    const content = fs.readFileSync(examplePath, "utf-8")
+    lines = content.split("\n")
+
+    // Parse existing keys
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith("#")) continue
+
+      const eqIndex = trimmed.indexOf("=")
+      if (eqIndex === -1) continue
+
+      const key = trimmed.substring(0, eqIndex).trim()
+      if (key) existingKeys.add(key)
+    }
+  } else {
+    // Create new file with a header
+    lines = [
+      "# Environment Variables",
+      "# Copy this file to .env and fill in the values",
+      "",
+    ]
+  }
+
+  // Collect keys that need to be added
+  const keysToAdd = keys.filter(k => !existingKeys.has(k))
+  if (keysToAdd.length === 0) return 0
+
+  // Add blank line separator if file doesn't end with one
+  if (lines.length > 0 && lines[lines.length - 1].trim() !== "") {
+    lines.push("")
+  }
+
+  for (const key of keysToAdd) {
+    lines.push(`${key}=`)
+  }
+
+  // Write file
+  const finalContent = lines.join("\n").replace(/\n+$/, "") + "\n"
+  fs.writeFileSync(examplePath, finalContent, "utf-8")
+
+  return keysToAdd.length
+}
+
+module.exports = {writeEnvFile, ensureGitignore, syncToEnvExample}
