@@ -349,4 +349,63 @@ function scanCodebase(cwd) {
   return foundVars
 }
 
-module.exports = {scanCodebase, scanEnvFilesOnly, parseExistingEnv}
+/**
+ * Recursively discover all folders that contain env files.
+ * Returns array of { relPath, absPath, envFiles[] }
+ */
+function discoverEnvFolders(cwd) {
+  const ENV_NAMES = [
+    ".env", ".env.local", ".env.development", ".env.production",
+    ".env.example", ".env.sample", ".env.template",
+  ]
+
+  const SKIP_DIRS = new Set([
+    "node_modules", ".git", "dist", "build", ".next", ".nuxt",
+    ".output", "coverage", "__pycache__", "vendor", ".venv",
+    "venv", "target", ".cache", ".turbo",
+  ])
+
+  const results = []
+
+  function walk(dir, depth) {
+    if (depth > 8) return // prevent too-deep traversal
+
+    // Check if this directory has any env files
+    const foundEnvFiles = []
+    for (const name of ENV_NAMES) {
+      const full = path.join(dir, name)
+      if (fs.existsSync(full)) {
+        foundEnvFiles.push(name)
+      }
+    }
+
+    if (foundEnvFiles.length > 0) {
+      const relPath = path.relative(cwd, dir).replace(/\\/g, "/") || "."
+      results.push({
+        relPath,
+        absPath: dir,
+        envFiles: foundEnvFiles,
+      })
+    }
+
+    // Recurse into subdirectories
+    let entries
+    try {
+      entries = fs.readdirSync(dir, {withFileTypes: true})
+    } catch {
+      return
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      if (SKIP_DIRS.has(entry.name)) continue
+      if (entry.name.startsWith(".") && entry.name !== ".") continue
+      walk(path.join(dir, entry.name), depth + 1)
+    }
+  }
+
+  walk(cwd, 0)
+  return results
+}
+
+module.exports = {scanCodebase, scanEnvFilesOnly, parseExistingEnv, discoverEnvFolders}
